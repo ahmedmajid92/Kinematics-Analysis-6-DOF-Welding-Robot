@@ -1,0 +1,17 @@
+# Python dependencies for 6-DOF Robotic Welding Simulator
+# Implementation of "Kinematics Analysis of 6 DOF Industrial Manipulator..."
+
+# Web Framework
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# Scientific Computing
+numpy==1.26.2
+
+# Optional: For enhanced data visualization and analysis
+matplotlib==3.8.2
+scipy==1.11.4
+
+# Development
+python-dateutil==2.8.2
+

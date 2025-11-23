@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>6-DOF Robotic Welding Simulator</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; 
+            flex-direction: column;
+            height: 100vh;
+            background: #f5f5f5;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 15px 30px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        header p {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        #controls {
+            width: 300px;
+            background: white;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+        
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+        }
+        
+        #visualization {
+            flex: 2;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        #joint-plots {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            min-height: 250px;
+        }
+        
+        .section {
+            margin-bottom: 25px;
+        }
+        
+        .section h3 {
+            font-size: 16px;
+            color: #2a5298;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .slider-group {
+            margin-bottom: 15px;
+        }
+        
+        .slider-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .slider-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #2a5298;
+            cursor: pointer;
+        }
+        
+        .slider-group input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #2a5298;
+            cursor: pointer;
+            border: none;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            background: #2a5298;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #1e3c72;
+        }
+        
+        button.secondary {
+            background: #6c757d;
+        }
+        
+        button.secondary:hover {
+            background: #545b62;
+        }
+        
+        #status {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #495057;
+            border-left: 3px solid #2a5298;
+        }
+        
+        .metadata {
+            font-size: 11px;
+            color: #666;
+            margin-top: 10px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .metadata-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        
+        .controls-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .controls-group button {
+            flex: 1;
+            padding: 8px;
+            font-size: 12px;
+        }
+        
+        .checkbox-group {
+            margin: 10px 0;
+        }
+        
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>6-DOF Robotic Welding Simulator</h1>
+        <p>Implementation of "Kinematics Analysis of 6 DOF Industrial Manipulator and Trajectory Planning for Robotic Welding Operation"</p>
+    </header>
+    
+    <div class="main-container">
+        <div id="controls">
+            <div class="section">
+                <h3>Manual Control</h3>
+                <div id="sliders"></div>
+                <button class="secondary" onclick="resetJoints()">Reset All Joints</button>
+                <div style="font-size: 11px; color: #666; margin-top: 10px; padding: 8px; background: #d1ecf1; border-radius: 4px; border-left: 3px solid #17a2b8;">
+                    <strong>Configuration:</strong> Robot mounted overhead (Z=800mm) and welds downward onto floor. Gray surface is welding floor (Z=0). Red-orange line shows welded path during animation.
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Welding Test Cases</h3>
+                <button onclick="runCase(1)">Case 1: Triangle</button>
+                <button onclick="runCase(2)">Case 2: Rectangle (120×120mm)</button>
+                <button onclick="runCase(3)">Case 3: Line + Semicircle</button>
+                
+                <div class="controls-group">
+                    <button class="secondary" onclick="showValidation()">Validation Report</button>
+                    <button class="secondary" onclick="exportData()">Export CSV</button>
+                </div>
+                
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="showPath" checked onchange="togglePath()">
+                        Show Welding Path
+                    </label>
+                    <label>
+                        <input type="checkbox" id="showWorkspace" onchange="toggleWorkspace()">
+                        Show Workspace
+                    </label>
+                </div>
+            </div>
+            
+            <div id="status">Ready</div>
+            
+            <div id="metadata" class="metadata" style="display: none;">
+                <div class="metadata-row">
+                    <span>Points:</span>
+                    <span id="meta-points">-</span>
+                </div>
+                <div class="metadata-row">
+                    <span>Solve Time:</span>
+                    <span id="meta-time">-</span>
+                </div>
+                <div class="metadata-row">
+                    <span>Avg Error:</span>
+                    <span id="meta-error">-</span>
+                </div>
+                <div class="metadata-row">
+                    <span>Paper Match:</span>
+                    <span id="meta-match">-</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="content-area">
+            <div id="visualization"></div>
+            <div id="joint-plots"></div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let currentJoints = [0, 0, 0, 0, 0, 0];
+        let currentFrames = [];
+        let currentPath = [];
+        let currentTargetPath = [];  // Target Cartesian path (reference shape)
+        let currentCaseId = null;
+        let animationRunning = false;
+        let weldingTrace = [];  // Store welding path for visualization
+        
+        // Robot visualization layout - Floor/side mounting configuration
+        const layout3D = {
+            title: '6-DOF Manipulator - Floor/Side Mount (Welding Downward)',
+            scene: {
+                xaxis: {range: [-300, 1200], title: 'X (mm)'},     // Expanded for full reach
+                yaxis: {range: [-500, 500], title: 'Y (mm)'},      // Expanded left-right
+                zaxis: {range: [-100, 1000], title: 'Z (mm)'},     // Expanded height
+                aspectmode: 'cube',
+                camera: {
+                    eye: {x: -1.5, y: -1.5, z: 0.8}  // Adjusted view angle
+                }
+            },
+            showlegend: true,
+            margin: {l: 0, r: 0, t: 40, b: 0}
+        };
+        
+        // Initialize 3D plot
+        Plotly.newPlot('visualization', [], layout3D);
+
+        // Joint angle plots layout
+        const layoutJoints = {
+            title: 'Joint Angles vs Time',
+            grid: {rows: 2, columns: 3, pattern: 'independent'},
+            showlegend: false,
+            margin: {l: 50, r: 20, t: 40, b: 40}
+        };
+
+        // Initialize sliders with SAFE limits (keeping robot above ground)
+        // Original limits from paper, but J2 restricted to prevent underground positions
+        const limits = [[-60,60], [-30,30], [-80,80], [-180,180], [-80,80], [-270,270]];
+        const jointNames = ['Base', 'Shoulder', 'Elbow', 'Wrist 1', 'Wrist 2', 'Wrist 3'];
+        const slidersDiv = document.getElementById('sliders');
+
+        limits.forEach((lim, i) => {
+            const div = document.createElement('div');
+            div.className = 'slider-group';
+            div.innerHTML = `
+                <label>
+                    <span>J${i+1} (${jointNames[i]})</span>
+                    <span id="val${i}">0°</span>
+                </label>
+                <input type="range" min="${lim[0]}" max="${lim[1]}" value="0" step="1"
+                       oninput="updateFK(${i}, this.value)">
+            `;
+            slidersDiv.appendChild(div);
+        });
+
+        let updateFKTimeout = null;
+        
+        function updateFK(idx, val) {
+            if (animationRunning) return;
+            
+            currentJoints[idx] = parseFloat(val);
+            document.getElementById(`val${idx}`).innerText = val + '°';
+            
+            // Debounce: wait 50ms after slider stops moving before updating
+            clearTimeout(updateFKTimeout);
+            updateFKTimeout = setTimeout(() => {
+                fetch('/api/calculate_fk', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({joints: currentJoints})
+                })
+                .then(r => r.json())
+                .then(data => {
+                    // Check if end-effector is underground
+                    const endEffZ = data.origins[data.origins.length - 1][2];
+                    if (endEffZ < 0) {
+                        document.getElementById('status').innerText = 
+                            `⚠️ Warning: Robot underground (Z=${endEffZ.toFixed(0)}mm)`;
+                        document.getElementById('status').style.color = '#dc3545';
+                    } else {
+                        document.getElementById('status').innerText = 'Ready';
+                        document.getElementById('status').style.color = '';
+                    }
+                    drawRobot(data.origins, null, false, currentJoints, null);
+                });
+            }, 50);  // 50ms debounce delay
+        }
+        
+        function resetJoints() {
+            currentJoints = [0, 0, 0, 0, 0, 0];
+            for (let i = 0; i < 6; i++) {
+                document.getElementById(`val${i}`).innerText = '0°';
+                document.querySelectorAll('input[type="range"]')[i].value = 0;
+            }
+            
+            // Redraw robot at zero position
+            fetch('/api/calculate_fk', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({joints: currentJoints})
+            })
+            .then(r => r.json())
+            .then(data => drawRobot(data.origins, null, false, currentJoints, null));
+        }
+
+        async function drawRobot(origins, pathPoints = null, showPath = true, joints = null, targetPath = null, frameIndex = null) {
+            // Debug: Log draw calls during animation (every 20 frames to avoid spam)
+            if (frameIndex !== null && frameIndex % 20 === 0) {
+                console.log(`Drawing frame ${frameIndex}, origins:`, origins.length, 'joints:', joints);
+            }
+            
+            const traces = [];
+            
+            // Robot links - individual colored segments
+            const linkColors = ['#dc3545', '#fd7e14', '#ffc107', '#28a745', '#20c997', '#17a2b8', '#6c757d'];
+            const linkNames = ['Base→J1', 'J1→J2', 'J2→J3', 'J3→J4', 'J4→J5', 'J5→J6', 'J6→TCP'];
+            
+            for (let i = 0; i < origins.length - 1; i++) {
+                traces.push({
+                type: 'scatter3d',
+                    mode: 'lines',
+                    name: linkNames[i],
+                    x: [origins[i][0], origins[i+1][0]],
+                    y: [origins[i][1], origins[i+1][1]],
+                    z: [origins[i][2], origins[i+1][2]],
+                    line: {width: 10, color: linkColors[i]},
+                    showlegend: false
+                });
+            }
+            
+            // Joint markers with distinct colors
+            for (let i = 0; i < origins.length; i++) {
+                const jointNames = ['Base', 'J1', 'J2', 'J3', 'J4', 'J5', 'J6', 'TCP'];
+            traces.push({
+                type: 'scatter3d',
+                mode: 'markers',
+                    name: jointNames[i],
+                    x: [origins[i][0]],
+                    y: [origins[i][1]],
+                    z: [origins[i][2]],
+                    marker: {
+                        size: i === 0 ? 12 : (i === origins.length - 1 ? 10 : 8),
+                        color: linkColors[Math.min(i, linkColors.length - 1)],
+                        line: {color: '#fff', width: 2},
+                        symbol: i === 0 ? 'diamond' : 'circle'
+                    },
+                    showlegend: false,
+                    hovertext: jointNames[i]
+            });
+            }
+            
+            // Welding Gun End Effector (detailed visualization)
+            const endEffector = origins[origins.length - 1];
+            const wristJoint = origins[origins.length - 2];
+            
+            // Get J6 angle for rotation (convert to radians)
+            const j6_angle = joints ? (joints[5] * Math.PI / 180) : 0;
+            
+            // Welding gun components
+            const gunBodyLength = 40;  // mm
+            const nozzleLength = 25;   // mm
+            const contactTipLength = 15;  // mm
+            
+            // Gun body (from wrist to gun base) - dark gray cylinder
+            const gunBase = [endEffector[0], endEffector[1], endEffector[2] - gunBodyLength];
+            traces.push({
+                type: 'scatter3d',
+                mode: 'lines',
+                name: 'Gun Body',
+                x: [endEffector[0], gunBase[0]],
+                y: [endEffector[1], gunBase[1]],
+                z: [endEffector[2], gunBase[2]],
+                line: {width: 14, color: '#4a4a4a'},
+                showlegend: false
+            });
+            
+            // Gas nozzle (silver cone)
+            const nozzleEnd = [gunBase[0], gunBase[1], gunBase[2] - nozzleLength];
+            traces.push({
+                type: 'scatter3d',
+                mode: 'lines',
+                name: 'Gas Nozzle',
+                x: [gunBase[0], nozzleEnd[0]],
+                y: [gunBase[1], nozzleEnd[1]],
+                z: [gunBase[2], nozzleEnd[2]],
+                line: {width: 10, color: '#c0c0c0'},
+                showlegend: false
+            });
+            
+            // Contact tip (copper colored)
+            const contactTip = [nozzleEnd[0], nozzleEnd[1], nozzleEnd[2] - contactTipLength];
+            traces.push({
+                type: 'scatter3d',
+                mode: 'lines',
+                name: 'Contact Tip',
+                x: [nozzleEnd[0], contactTip[0]],
+                y: [nozzleEnd[1], contactTip[1]],
+                z: [nozzleEnd[2], contactTip[2]],
+                line: {width: 6, color: '#b87333'},
+                showlegend: false
+            });
+            
+            // J6 rotation indicator (perpendicular arm)
+            const armLength = 50;  // mm
+            const armX = endEffector[0] + armLength * Math.cos(j6_angle);
+            const armY = endEffector[1] + armLength * Math.sin(j6_angle);
+            const armZ = endEffector[2];
+            
+            traces.push({
+                type: 'scatter3d',
+                mode: 'lines+markers',
+                name: 'J6 Rotation',
+                x: [endEffector[0], armX],
+                y: [endEffector[1], armY],
+                z: [endEffector[2], armZ],
+                line: {width: 8, color: '#ff0000', dash: 'dot'},
+                marker: {size: 8, color: '#ff0000', symbol: 'square'},
+                showlegend: false
+            });
+            
+            // Target reference path (ideal geometric shape from trajectory.py)
+            // Show progressively during animation
+            if (showPath && targetPath && targetPath.length > 0 && document.getElementById('showPath').checked) {
+                // Calculate how much of target path to show based on current frame
+                let visibleTargetPath = targetPath;
+                if (frameIndex !== null && currentFrames.length > 0) {
+                    const progressRatio = frameIndex / currentFrames.length;
+                    const visibleCount = Math.max(2, Math.floor(progressRatio * targetPath.length));
+                    visibleTargetPath = targetPath.slice(0, visibleCount);
+                }
+                
+                if (visibleTargetPath.length > 0) {
+                    const targetTrace = {
+                type: 'scatter3d',
+                        mode: 'lines+markers',
+                        name: 'Target Shape',
+                        x: visibleTargetPath.map(p => p.pos[0]),
+                        y: visibleTargetPath.map(p => p.pos[1]),
+                        z: visibleTargetPath.map(p => p.pos[2]),
+                        line: {width: 5, color: '#ff0000', dash: 'dash'},
+                        marker: {size: 2, color: '#ff0000'},
+                        opacity: 0.6
+                    };
+                    traces.push(targetTrace);
+                }
+            }
+            
+            // Actual welding path (from FK of joint angles)
+            if (showPath && pathPoints && pathPoints.length > 0 && document.getElementById('showPath').checked) {
+                const pathTrace = {
+                    type: 'scatter3d',
+                    mode: 'lines',
+                    name: 'Actual Path',
+                    x: pathPoints.map(p => p.pos[0]),
+                    y: pathPoints.map(p => p.pos[1]),
+                    z: pathPoints.map(p => p.pos[2]),
+                    line: {width: 3, color: '#ffc107', dash: 'dot'},
+                    opacity: 0.4
+                };
+                traces.push(pathTrace);
+            }
+            
+            // Welded path trace (accumulated during animation)
+            if (weldingTrace.length > 1) {
+                traces.push({
+                    type: 'scatter3d',
+                    mode: 'lines',
+                    name: 'Welded Path',
+                    x: weldingTrace.map(p => p[0]),
+                    y: weldingTrace.map(p => p[1]),
+                    z: weldingTrace.map(p => p[2]),
+                    line: {width: 8, color: '#ff4500'},  // Bright red-orange for welded path
+                    opacity: 1.0
+                });
+            }
+            
+            // Ground plane at Z=0 (floor level) - expanded
+            const gridPoints = [];
+            for (let x = -200; x <= 1200; x += 200) {
+                for (let y = -500; y <= 500; y += 200) {
+                    gridPoints.push([x, y, 0]);
+                }
+            }
+            traces.push({
+                type: 'scatter3d',
+                mode: 'markers',
+                name: 'Floor',
+                x: gridPoints.map(p => p[0]),
+                y: gridPoints.map(p => p[1]),
+                z: gridPoints.map(p => p[2]),
+                marker: {size: 3, color: '#777777', opacity: 0.3},
+                showlegend: false,
+                hoverinfo: 'skip'
+            });
+            
+            // Work surface at Z=-100mm (welding level) - large surface
+            const work_z = -100;
+            traces.push({
+                type: 'mesh3d',
+                name: 'Work Surface (Z=-100mm)',
+                x: [300, 1200, 1200, 300],
+                y: [-500, -500, 500, 500],
+                z: [work_z, work_z, work_z, work_z],
+                i: [0, 0],
+                j: [1, 2],
+                k: [2, 3],
+                color: '#4477aa',
+                opacity: 0.25,
+                showlegend: false,
+                hoverinfo: 'name'
+            });
+            
+            // Workspace boundary (optional)
+            if (document.getElementById('showWorkspace').checked) {
+                // Robot workspace - circular boundary at ground level
+                const theta = Array.from({length: 50}, (_, i) => i * 2 * Math.PI / 49);
+                const radius = 1200;  // Maximum reach
+                traces.push({
+                    type: 'scatter3d',
+                    mode: 'lines',
+                    name: 'Workspace',
+                    x: theta.map(t => radius * Math.cos(t)),
+                    y: theta.map(t => radius * Math.sin(t)),
+                    z: Array(50).fill(0),
+                    line: {width: 2, color: '#999', dash: 'dot'},
+                    opacity: 0.5,
+                    showlegend: false
+                });
+            }
+            
+            Plotly.react('visualization', traces, layout3D);
+            
+            // Force a small delay to ensure Plotly completes rendering before next frame
+            await new Promise(r => setTimeout(r, 10));
+        }
+        
+        function drawJointAngles(frames) {
+            if (!frames || frames.length === 0) return;
+            
+            const traces = [];
+            const timeSteps = frames.map((_, i) => i);
+            
+            for (let joint = 0; joint < 6; joint++) {
+                const angles = frames.map(f => f.joints[joint]);
+                const row = Math.floor(joint / 3);
+                const col = joint % 3;
+                
+                traces.push({
+                    x: timeSteps,
+                    y: angles,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `Joint ${joint + 1}`,
+                    line: {width: 2},
+                    xaxis: `x${joint === 0 ? '' : joint + 1}`,
+                    yaxis: `y${joint === 0 ? '' : joint + 1}`
+                });
+            }
+            
+            const layout = {
+                title: 'Joint Angles vs Frame Number',
+                grid: {rows: 2, columns: 3, pattern: 'independent', roworder: 'top to bottom'},
+                showlegend: false,
+                margin: {l: 50, r: 20, t: 40, b: 40},
+                annotations: []
+            };
+            
+            // Add subplot titles
+            const jointNames = ['Joint 1 (Base)', 'Joint 2 (Shoulder)', 'Joint 3 (Elbow)',
+                               'Joint 4 (Wrist 1)', 'Joint 5 (Wrist 2)', 'Joint 6 (Wrist 3)'];
+            for (let i = 0; i < 6; i++) {
+                layout.annotations.push({
+                    text: jointNames[i],
+                    xref: `x${i === 0 ? '' : i + 1} domain`,
+                    yref: `y${i === 0 ? '' : i + 1} domain`,
+                    x: 0.5,
+                    y: 1,
+                    xanchor: 'center',
+                    yanchor: 'bottom',
+                    showarrow: false,
+                    font: {size: 11}
+                });
+            }
+            
+            Plotly.react('joint-plots', traces, layout);
+        }
+
+        async function runCase(id) {
+            if (animationRunning) {
+                alert('Animation already running. Please wait...');
+                return;
+            }
+            
+            currentCaseId = id;
+            animationRunning = true;
+            document.getElementById('status').innerText = `Simulating Case ${id}...`;
+            document.getElementById('metadata').style.display = 'none';
+            
+            try {
+                const res = await fetch('/api/simulate_path', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({case_id: id})
+                });
+                const data = await res.json();
+                
+                currentFrames = data.frames;
+                currentPath = data.path;
+                currentTargetPath = data.target_path || [];
+                
+                // Update metadata
+                if (data.metadata) {
+                    document.getElementById('meta-points').innerText = data.metadata.total_points;
+                    document.getElementById('meta-time').innerText = data.metadata.solve_time_ms + ' ms';
+                    document.getElementById('meta-error').innerText = 
+                        data.metadata.validation.avg_error_mm.toFixed(3) + ' mm';
+                    document.getElementById('meta-match').innerText = 
+                        data.metadata.paper_match ? '✓ Yes' : '✗ No';
+                    document.getElementById('metadata').style.display = 'block';
+                }
+                
+                // Draw joint angle plots
+                drawJointAngles(currentFrames);
+                
+                // Clear previous welding trace
+                weldingTrace = [];
+                
+                // Debug: Log animation start
+                console.log('🤖 Starting animation with', currentFrames.length, 'frames');
+                console.log('Animation running flag:', animationRunning);
+                
+                // Animate robot and accumulate welding trace
+                for (let i = 0; i < currentFrames.length; i++) {
+                    const frame = currentFrames[i];
+                    
+                    // Debug: Log every 10th frame with end-effector position
+                    if (i % 10 === 0) {
+                        const endEffPos = frame.origins[frame.origins.length - 1];
+                        console.log(`Frame ${i}/${currentFrames.length}:`, 
+                                   'Joints:', frame.joints.map(j => j.toFixed(1)),
+                                   'TCP:', endEffPos.map(v => v.toFixed(1)));
+                    }
+                    
+                    // Update status with animation progress
+                    const progress = Math.round((i / currentFrames.length) * 100);
+                    document.getElementById('status').innerHTML = 
+                        `<strong>🤖 ANIMATING Case ${id}...</strong><br>` +
+                        `Frame: <strong>${i+1}/${currentFrames.length}</strong> (${progress}%)`;
+                    
+                    // Add current end-effector position to welding trace
+                    const endEffPos = frame.origins[frame.origins.length - 1];
+                    weldingTrace.push(endEffPos);
+                    
+                    // Pass frame index for progressive path drawing
+                    await drawRobot(frame.origins, currentPath, true, frame.joints, currentTargetPath, i);
+                    
+                    // Update slider displays and current joints
+                    frame.joints.forEach((angle, j) => {
+                        document.getElementById(`val${j}`).innerText = angle.toFixed(1) + '°';
+                        currentJoints[j] = angle;
+                    });
+                    
+                    await new Promise(r => setTimeout(r, 40)); // 40ms per frame for smooth animation
+                }
+                
+                // Debug: Log animation completion
+                console.log('✅ Animation complete!', weldingTrace.length, 'trace points');
+                
+                document.getElementById('status').innerText = 
+                    `Case ${id} complete. ${data.frames.length} frames, ` +
+                    `${data.metadata.solve_time_ms}ms solve time. Welding trace visible.`;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('status').innerText = `Error: ${error.message}`;
+            } finally {
+                animationRunning = false;
+            }
+        }
+        
+        async function showValidation() {
+            if (!currentCaseId) {
+                alert('Please run a test case first!');
+                return;
+            }
+            
+            document.getElementById('status').innerText = "Generating validation report...";
+            
+            try {
+                const res = await fetch('/api/validate_case', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({case_id: currentCaseId})
+                });
+                const data = await res.json();
+                
+                // Display report in console and alert
+                console.log(data.report);
+                alert('Validation report generated. Check browser console for details.');
+                document.getElementById('status').innerText = "Validation complete. See console.";
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error generating validation report: ' + error.message);
+            }
+        }
+        
+        function exportData() {
+            if (currentFrames.length === 0) {
+                alert('No data to export. Please run a test case first!');
+                return;
+            }
+            
+            // Create CSV content
+            let csv = 'Frame,Joint1,Joint2,Joint3,Joint4,Joint5,Joint6\n';
+            currentFrames.forEach((frame, i) => {
+                csv += `${i},${frame.joints.join(',')}\n`;
+            });
+            
+            // Download CSV
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `case${currentCaseId}_joint_angles.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            document.getElementById('status').innerText = "Data exported successfully.";
+        }
+        
+        function togglePath() {
+            if (currentFrames.length > 0) {
+                const frame = currentFrames[currentFrames.length - 1];
+                // Show full path when toggling (not progressive)
+                drawRobot(frame.origins, currentPath, true, frame.joints, currentTargetPath, null);
+            }
+        }
+        
+        function toggleWorkspace() {
+            if (currentFrames.length > 0) {
+                const frame = currentFrames[currentFrames.length - 1];
+                drawRobot(frame.origins, currentPath, true, frame.joints, currentTargetPath, null);
+            } else {
+                fetch('/api/calculate_fk', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({joints: currentJoints})
+                })
+                .then(r => r.json())
+                .then(data => drawRobot(data.origins, null, false, currentJoints, null, null));
+            }
+        }
+        
+        // Initial visualization
+        fetch('/api/calculate_fk', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({joints: currentJoints})
+        })
+        .then(r => r.json())
+        .then(data => drawRobot(data.origins, null, false, currentJoints, null));
+    </script>
+</body>
+</html>

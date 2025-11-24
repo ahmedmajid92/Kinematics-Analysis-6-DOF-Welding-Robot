@@ -309,9 +309,8 @@
             margin: {l: 50, r: 20, t: 40, b: 40}
         };
 
-        // Initialize sliders with SAFE limits (keeping robot above ground)
-        // Original limits from paper, but J2 restricted to prevent underground positions
-        const limits = [[-60,60], [-30,30], [-80,80], [-180,180], [-80,80], [-270,270]];
+        // Initialize sliders with limits from DH parameters (Table 1 in paper)
+        const limits = [[-60,60], [0,90], [-80,80], [-180,180], [-80,80], [-270,270]];
         const jointNames = ['Base', 'Shoulder', 'Elbow', 'Wrist 1', 'Wrist 2', 'Wrist 3'];
         const slidersDiv = document.getElementById('sliders');
 
@@ -337,6 +336,11 @@
             currentJoints[idx] = parseFloat(val);
             document.getElementById(`val${idx}`).innerText = val + '°';
             
+            // Debug logging for J4 (index 3)
+            if (idx === 3) {
+                console.log(`🔧 J4 slider moved! Index=${idx}, Value=${val}, currentJoints=`, currentJoints);
+            }
+            
             // Debounce: wait 50ms after slider stops moving before updating
             clearTimeout(updateFKTimeout);
             updateFKTimeout = setTimeout(() => {
@@ -347,6 +351,11 @@
                 })
                 .then(r => r.json())
                 .then(data => {
+                    // Debug logging for J4
+                    if (idx === 3) {
+                        console.log(`🔧 FK response for J4 movement:`, data.origins);
+                    }
+                    
                     // Check if end-effector is underground
                     const endEffZ = data.origins[data.origins.length - 1][2];
                     if (endEffZ < 0) {
@@ -380,6 +389,12 @@
         }
 
         async function drawRobot(origins, pathPoints = null, showPath = true, joints = null, targetPath = null, frameIndex = null) {
+            // Debug: Always log origins count for manual control (when frameIndex is null)
+            if (frameIndex === null && joints) {
+                console.log(`📍 Drawing robot: ${origins.length} origins, joints=`, joints);
+                console.log(`📍 Origins:`, origins);
+            }
+            
             // Debug: Log draw calls during animation (every 20 frames to avoid spam)
             if (frameIndex !== null && frameIndex % 20 === 0) {
                 console.log(`Drawing frame ${frameIndex}, origins:`, origins.length, 'joints:', joints);
@@ -387,9 +402,9 @@
             
             const traces = [];
             
-            // Robot links - individual colored segments
-            const linkColors = ['#dc3545', '#fd7e14', '#ffc107', '#28a745', '#20c997', '#17a2b8', '#6c757d'];
-            const linkNames = ['Base→J1', 'J1→J2', 'J2→J3', 'J3→J4', 'J4→J5', 'J5→J6', 'J6→TCP'];
+            // Robot links - individual colored segments (6 links for 6-DOF robot)
+            const linkColors = ['#dc3545', '#fd7e14', '#ffc107', '#28a745', '#20c997', '#17a2b8'];
+            const linkNames = ['Base→J1', 'J1→J2', 'J2→J3', 'J3→J4', 'J4→J5', 'J5→J6'];
             
             for (let i = 0; i < origins.length - 1; i++) {
                 traces.push({
@@ -423,6 +438,62 @@
                     showlegend: false,
                     hovertext: jointNames[i]
             });
+            }
+            
+            // J4 rotation indicator (since J4-J5 link has zero length in DH parameters)
+            // Draw as a rotating circle/disk to show wrist rotation clearly
+            if (joints && origins.length >= 5) {
+                const j4_position = origins[4]; // J4 is at origins[4]
+                const j4_angle = joints[3] * Math.PI / 180; // J4 is joints[3]
+                const circleRadius = 40; // mm - radius of rotation indicator circle
+                const numPoints = 24; // Number of points to make the circle
+                
+                // Generate circle points in XY plane, rotated by j4_angle
+                const circleX = [];
+                const circleY = [];
+                const circleZ = [];
+                
+                for (let i = 0; i <= numPoints; i++) {
+                    const angle = (i / numPoints) * 2 * Math.PI;
+                    const localX = circleRadius * Math.cos(angle);
+                    const localY = circleRadius * Math.sin(angle);
+                    
+                    // Rotate the circle by j4_angle
+                    const rotatedX = localX * Math.cos(j4_angle) - localY * Math.sin(j4_angle);
+                    const rotatedY = localX * Math.sin(j4_angle) + localY * Math.cos(j4_angle);
+                    
+                    circleX.push(j4_position[0] + rotatedX);
+                    circleY.push(j4_position[1] + rotatedY);
+                    circleZ.push(j4_position[2]);
+                }
+                
+                // Draw the circle
+                traces.push({
+                    type: 'scatter3d',
+                    mode: 'lines',
+                    name: 'J4 Wrist Rotation',
+                    x: circleX,
+                    y: circleY,
+                    z: circleZ,
+                    line: {width: 4, color: '#20c997'},  // Teal color
+                    showlegend: false,
+                    hovertext: 'J4 Wrist Rotation Indicator'
+                });
+                
+                // Add a rotating indicator arm from center to edge
+                const armX = j4_position[0] + circleRadius * Math.cos(j4_angle);
+                const armY = j4_position[1] + circleRadius * Math.sin(j4_angle);
+                traces.push({
+                    type: 'scatter3d',
+                    mode: 'lines+markers',
+                    name: 'J4 Pointer',
+                    x: [j4_position[0], armX],
+                    y: [j4_position[1], armY],
+                    z: [j4_position[2], j4_position[2]],
+                    line: {width: 3, color: '#20c997'},
+                    marker: {size: 8, color: '#28a745', symbol: 'circle'},  // Green marker at tip
+                    showlegend: false
+                });
             }
             
             // Welding Gun End Effector (detailed visualization)
